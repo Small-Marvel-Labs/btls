@@ -230,6 +230,11 @@ fn get_boringssl_cmake_config(config: &Config) -> cmake::Config {
     }
 
     if config.host == config.target {
+        // The selected Xcode's SDK, as rustc links against, rather than the compiler's
+        // default, which may be a newer Command Line Tools SDK its linker can't read.
+        if config.target_os == "macos" {
+            boringssl_cmake.define("CMAKE_OSX_SYSROOT", get_apple_sdk_name(config));
+        }
         return boringssl_cmake;
     }
 
@@ -468,22 +473,46 @@ fn ensure_patches_applied(config: &Config) -> io::Result<()> {
         run_command(Command::new("git").arg("init").current_dir(src_path))?;
     }
 
-    println!("cargo:warning=applying post quantum crypto patch to boringssl");
-    apply_patch(config, "boring-pq.patch")?;
-
-    println!("cargo:warning=applying patch to boringssl");
-    apply_patch(config, "boringssl.patch")?;
-
     println!("cargo:warning=applying loongarch patch to boringssl");
     apply_patch(config, "boringssl-loongarch.patch")?;
-
-    println!("cargo:warning=applying windows cross compile patch to boringssl");
-    apply_patch(config, "boringssl-windows.patch")?;
 
     if config.features.underscore_wildcards {
         println!("cargo:warning=applying underscore wildcards patch to boringssl");
         apply_patch(config, "underscore-wildcards.patch")?;
     }
+
+    println!("cargo:warning=applying WireMason ClientHello controls to BoringSSL");
+    apply_patch(config, "wiremason-clienthello.patch")?;
+
+    println!("cargo:warning=applying WireMason server flight controls to BoringSSL");
+    apply_patch(config, "wiremason-serverhello.patch")?;
+
+    println!("cargo:warning=applying WireMason X448 key exchange to BoringSSL");
+    apply_patch(config, "wiremason-x448.patch")?;
+
+    println!("cargo:warning=applying WireMason max_fragment_length to BoringSSL");
+    apply_patch(config, "wiremason-max-fragment-length.patch")?;
+
+    println!("cargo:warning=applying WireMason TLS 1.2 DHE server and group bounds to BoringSSL");
+    apply_patch(config, "wiremason-dhe.patch")?;
+
+    println!("cargo:warning=applying WireMason RSASSA-PSS certificate verification to BoringSSL");
+    apply_patch(config, "wiremason-rsa-pss.patch")?;
+
+    println!("cargo:warning=applying WireMason OpenSSL's RSA key bounds to BoringSSL");
+    apply_patch(config, "wiremason-rsa-limits.patch")?;
+
+    println!("cargo:warning=applying WireMason unencrypted TLS 1.3 client alerts to BoringSSL");
+    apply_patch(config, "wiremason-plain-alerts.patch")?;
+
+    println!("cargo:warning=applying WireMason mirrored CertificateRequest to BoringSSL");
+    apply_patch(config, "wiremason-client-auth.patch")?;
+
+    println!("cargo:warning=applying WireMason verification after the server flight to BoringSSL");
+    apply_patch(config, "wiremason-verify-after-flight.patch")?;
+
+    println!("cargo:warning=applying WireMason close_notify mid-handshake to BoringSSL");
+    apply_patch(config, "wiremason-close-notify.patch")?;
 
     Ok(())
 }

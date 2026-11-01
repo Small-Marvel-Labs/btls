@@ -542,6 +542,13 @@ impl SslAlert {
     pub const UNKNOWN_PSK_IDENTITY: Self = Self(ffi::SSL_AD_UNKNOWN_PSK_IDENTITY);
     pub const CERTIFICATE_REQUIRED: Self = Self(ffi::SSL_AD_CERTIFICATE_REQUIRED);
     pub const NO_APPLICATION_PROTOCOL: Self = Self(ffi::SSL_AD_NO_APPLICATION_PROTOCOL);
+
+    /// Constructs an `SslAlert` from its raw value, an alert description (RFC 8446,
+    /// section 6), named here or not.
+    #[must_use]
+    pub const fn from_raw(raw: c_int) -> SslAlert {
+        SslAlert(raw)
+    }
 }
 
 /// An error returned from an ALPN selection callback.
@@ -613,6 +620,9 @@ impl ExtensionType {
     pub const NEXT_PROTO_NEG: Self = Self(ffi::TLSEXT_TYPE_next_proto_neg as u16);
     pub const CHANNEL_ID: Self = Self(ffi::TLSEXT_TYPE_channel_id as u16);
     pub const RECORD_SIZE_LIMIT: Self = Self(ffi::TLSEXT_TYPE_record_size_limit as u16);
+    pub const MAX_FRAGMENT_LENGTH: Self = Self(ffi::TLSEXT_TYPE_max_fragment_length as u16);
+    pub const ENCRYPT_THEN_MAC: Self = Self(ffi::TLSEXT_TYPE_encrypt_then_mac as u16);
+    pub const POST_HANDSHAKE_AUTH: Self = Self(ffi::TLSEXT_TYPE_post_handshake_auth as u16);
 }
 
 impl From<u16> for ExtensionType {
@@ -621,8 +631,8 @@ impl From<u16> for ExtensionType {
     }
 }
 
-/// An SSL/TLS/DTLS protocol version.
-#[derive(Copy, Clone, PartialEq, Eq)]
+/// An SSL/TLS protocol version.
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct SslVersion(u16);
 
 impl SslVersion {
@@ -640,15 +650,6 @@ impl SslVersion {
 
     /// TLSv1.3
     pub const TLS1_3: SslVersion = SslVersion(ffi::TLS1_3_VERSION as _);
-
-    /// DTLSv1.0
-    pub const DTLS1: SslVersion = SslVersion(ffi::DTLS1_VERSION as _);
-
-    /// DTLSv1.2
-    pub const DTLS1_2: SslVersion = SslVersion(ffi::DTLS1_2_VERSION as _);
-
-    /// DTLSv1.3
-    pub const DTLS1_3: SslVersion = SslVersion(ffi::DTLS1_3_VERSION as _);
 }
 
 impl TryFrom<u16> for SslVersion {
@@ -660,10 +661,7 @@ impl TryFrom<u16> for SslVersion {
             | ffi::TLS1_VERSION
             | ffi::TLS1_1_VERSION
             | ffi::TLS1_2_VERSION
-            | ffi::TLS1_3_VERSION
-            | ffi::DTLS1_VERSION
-            | ffi::DTLS1_2_VERSION
-            | ffi::DTLS1_3_VERSION => Ok(Self(value)),
+            | ffi::TLS1_3_VERSION => Ok(Self(value)),
             _ => Err("Unknown SslVersion"),
         }
     }
@@ -677,9 +675,6 @@ impl fmt::Debug for SslVersion {
             Self::TLS1_1 => "TLS1_1",
             Self::TLS1_2 => "TLS1_2",
             Self::TLS1_3 => "TLS1_3",
-            Self::DTLS1 => "DTLS1",
-            Self::DTLS1_2 => "DTLS1_2",
-            Self::DTLS1_3 => "DTLS1_3",
             _ => return write!(f, "{:#06x}", self.0),
         })
     }
@@ -693,9 +688,6 @@ impl fmt::Display for SslVersion {
             Self::TLS1_1 => "TLSv1.1",
             Self::TLS1_2 => "TLSv1.2",
             Self::TLS1_3 => "TLSv1.3",
-            Self::DTLS1 => "DTLSv1.0",
-            Self::DTLS1_2 => "DTLSv1.2",
-            Self::DTLS1_3 => "DTLSv1.3",
             _ => return write!(f, "unknown ({:#06x})", self.0),
         })
     }
@@ -770,18 +762,47 @@ impl KeyShare {
 
     pub const X25519: KeyShare = KeyShare(ffi::SSL_GROUP_X25519 as _);
 
+    pub const X448: KeyShare = KeyShare(ffi::SSL_GROUP_X448 as _);
+
     pub const X25519_MLKEM768: KeyShare = KeyShare(ffi::SSL_GROUP_X25519_MLKEM768 as _);
 
     pub const X25519_KYBER768_DRAFT00: KeyShare =
         KeyShare(ffi::SSL_GROUP_X25519_KYBER768_DRAFT00 as _);
 
-    pub const P256_KYBER768_DRAFT00: KeyShare = KeyShare(ffi::SSL_GROUP_P256_KYBER768_DRAFT00 as _);
+    pub const P256_KYBER768_DRAFT00: KeyShare = KeyShare(0xfe32);
 
     pub const MLKEM1024: KeyShare = KeyShare(ffi::SSL_GROUP_MLKEM1024 as _);
 
     pub const FFDHE2048: KeyShare = KeyShare(ffi::SSL_GROUP_FFDHE2048 as _);
 
     pub const FFDHE3072: KeyShare = KeyShare(ffi::SSL_GROUP_FFDHE3072 as _);
+
+    pub const FFDHE4096: KeyShare = KeyShare(ffi::SSL_GROUP_FFDHE4096 as _);
+
+    pub const FFDHE6144: KeyShare = KeyShare(ffi::SSL_GROUP_FFDHE6144 as _);
+
+    pub const FFDHE8192: KeyShare = KeyShare(ffi::SSL_GROUP_FFDHE8192 as _);
+}
+
+/// A ClientHello list [`SslContextBuilder::set_client_hello_list`] sets.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct ClientHelloList(c_int);
+
+impl ClientHelloList {
+    pub const CIPHER_SUITES: Self = Self(ffi::SSL_CLIENT_HELLO_CIPHER_SUITES as _);
+
+    pub const SUPPORTED_GROUPS: Self = Self(ffi::SSL_CLIENT_HELLO_SUPPORTED_GROUPS as _);
+
+    pub const KEY_SHARES: Self = Self(ffi::SSL_CLIENT_HELLO_KEY_SHARES as _);
+
+    pub const SUPPORTED_VERSIONS: Self = Self(ffi::SSL_CLIENT_HELLO_SUPPORTED_VERSIONS as _);
+
+    pub const SIGNATURE_ALGORITHMS: Self = Self(ffi::SSL_CLIENT_HELLO_SIGNATURE_ALGORITHMS as _);
+
+    pub const SIGNATURE_ALGORITHMS_CERT: Self =
+        Self(ffi::SSL_CLIENT_HELLO_SIGNATURE_ALGORITHMS_CERT as _);
+
+    pub const EC_POINT_FORMATS: Self = Self(ffi::SSL_CLIENT_HELLO_EC_POINT_FORMATS as _);
 }
 
 /// A compliance policy.
@@ -1501,12 +1522,29 @@ impl SslContextBuilder {
     /// [`ciphers`]: https://www.openssl.org/docs/manmaster/apps/ciphers.html
     #[corresponds(SSL_CTX_set_cipher_list)]
     pub fn set_cipher_list(&mut self, cipher_list: &str) -> Result<(), ErrorStack> {
+        let tls13: Vec<u16> = cipher_list
+            .split(':')
+            .filter_map(|name| match name {
+                "TLS_AES_128_GCM_SHA256" => Some(0x1301),
+                "TLS_AES_256_GCM_SHA384" => Some(0x1302),
+                "TLS_CHACHA20_POLY1305_SHA256" => Some(0x1303),
+                _ => None,
+            })
+            .collect();
         let cipher_list = CString::new(cipher_list).map_err(ErrorStack::internal_error)?;
         unsafe {
             cvt(ffi::SSL_CTX_set_cipher_list(
                 self.as_ptr(),
                 cipher_list.as_ptr(),
-            ))
+            ))?;
+            if !tls13.is_empty() {
+                cvt(ffi::SSL_CTX_set_tls13_cipher_order(
+                    self.as_ptr(),
+                    tls13.as_ptr(),
+                    tls13.len(),
+                ))?;
+            }
+            Ok(())
         }
     }
 
@@ -2020,28 +2058,166 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_grease_enabled(self.as_ptr(), enabled as _) }
     }
 
-    /// Sets whether the context should enable record size limit.
+    /// Sets the record size limit (RFC 8449) clients offer, or none if zero. Records sent after
+    /// the server answers with its own limit are no larger than it allows.
     #[corresponds(SSL_CTX_set_record_size_limit)]
     pub fn set_record_size_limit(&mut self, limit: u16) {
-        unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr(), limit as _) }
+        unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr(), limit) }
     }
 
-    /// Sets whether the context should enable delegated credentials.
+    /// Sets the max_fragment_length mode (RFC 6066) clients send as given, an invalid one such
+    /// as zero included. Once the server echoes a mode of 1 to 4, records sent are at most
+    /// 2^(8 + mode) bytes, and a larger one received fails the connection with a
+    /// record_overflow alert; a server echoing another value, or record_size_limit too
+    /// (RFC 8449, section 5), fails the handshake. Servers echo a client's mode, and then hold
+    /// records either way to the same length, only when their server extension order lists
+    /// the extension.
+    #[corresponds(SSL_CTX_set_max_fragment_length)]
+    pub fn set_max_fragment_length(&mut self, mode: u8) {
+        unsafe { ffi::SSL_CTX_set_max_fragment_length(self.as_ptr(), mode) }
+    }
+
+    /// Sets the length of the random legacy session ID clients send when they resume no
+    /// session by ID or TLS 1.2 ticket, at most 32 bytes: a TLS 1.3 client sending none
+    /// also sends no compatibility mode ChangeCipherSpec. `None` keeps BoringSSL's: 32 bytes
+    /// when offering TLS 1.3, else none.
+    #[corresponds(SSL_CTX_set_session_id_length)]
+    pub fn set_session_id_length(&mut self, len: Option<u8>) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_session_id_length(
+                self.as_ptr(),
+                len.map_or(-1, c_int::from),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the length of the random payload in the GREASE ECH extension clients send when
+    /// [`SslRef::set_enable_ech_grease`] is on, at least 1 byte; the ClientHello's extensions
+    /// must still fit in 65535 bytes. `None` keeps BoringSSL's: a random multiple of 32 bytes
+    /// from 128 to 224 plus the 16-byte AEAD tag.
+    #[corresponds(SSL_CTX_set_ech_grease_payload_length)]
+    pub fn set_ech_grease_payload_length(&mut self, len: Option<u16>) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_ech_grease_payload_length(
+                self.as_ptr(),
+                len.map_or(-1, c_int::from),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the HPKE `(kdf_id, aead_id)` cipher suite the GREASE ECH extension clients send
+    /// names, as given. `None` keeps BoringSSL's: HKDF-SHA256 with AES-128-GCM if AES hardware
+    /// is available and ChaCha20-Poly1305 otherwise, as does `Some((0, 0))`.
+    #[corresponds(SSL_CTX_set_ech_grease_cipher_suite)]
+    pub fn set_ech_grease_cipher_suite(&mut self, suite: Option<(u16, u16)>) {
+        let (kdf_id, aead_id) = suite.unwrap_or_default();
+        unsafe { ffi::SSL_CTX_set_ech_grease_cipher_suite(self.as_ptr(), kdf_id, aead_id) }
+    }
+
+    /// Sets the colon-separated signature algorithms with which clients accept delegated
+    /// credentials (RFC 9345), which they then offer and verify. An empty list offers none.
     #[corresponds(SSL_CTX_set_delegated_credentials)]
     pub fn set_delegated_credentials(&mut self, sigalgs: &str) -> Result<(), ErrorStack> {
-        let sigalgs = CString::new(sigalgs).unwrap();
+        let sigalgs = CString::new(sigalgs).map_err(ErrorStack::internal_error)?;
         unsafe {
-            cvt(ffi::SSL_CTX_set_delegated_credentials(self.as_ptr(), sigalgs.as_ptr()) as c_int)
-                .map(|_| ())
+            cvt(ffi::SSL_CTX_set_delegated_credentials(
+                self.as_ptr(),
+                sigalgs.as_ptr(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets whether the extension order set with [`Self::set_extension_permutation`] is the
+    /// ClientHello's whole extension list: the listed extensions are sent in that order, each
+    /// when its configuration calls for it, and no others. A GREASE value places a GREASE
+    /// extension, [`ExtensionType::PADDING`] a padding extension of
+    /// [`Self::set_padding_length`] bytes, [`ExtensionType::SIGNATURE_ALGORITHMS_CERT`] the
+    /// [`ClientHelloList::SIGNATURE_ALGORITHMS_CERT`] list if set, and
+    /// [`ExtensionType::ENCRYPT_THEN_MAC`] an encrypt_then_mac extension, which BoringSSL does
+    /// not implement: a server accepting it for a CBC cipher suite fails the handshake as an
+    /// offer-only selection (see [`Self::set_client_hello_list`]).
+    #[corresponds(SSL_CTX_set_strict_extension_order)]
+    pub fn set_strict_extension_order(&mut self, enabled: bool) {
+        unsafe { ffi::SSL_CTX_set_strict_extension_order(self.as_ptr(), enabled as _) }
+    }
+
+    /// Sets the values clients write in `list` of their initial ClientHello, verbatim and in
+    /// order, each GREASE value standing for the handshake's GREASE value for that list;
+    /// `None` restores the default list.
+    ///
+    /// The list may offer values BoringSSL does not implement or is not configured to
+    /// negotiate: only the configured values it offers are negotiated, and a server selecting
+    /// one of the others fails the handshake with `SSL_R_OFFER_ONLY_VALUE_SELECTED`, the
+    /// error's data naming the selection. [`ClientHelloList::KEY_SHARES`] must list configured
+    /// groups the supported_groups list offers, each at most once, and
+    /// [`ClientHelloList::EC_POINT_FORMATS`] values up to 255.
+    #[corresponds(SSL_CTX_set1_client_hello_list)]
+    pub fn set_client_hello_list(
+        &mut self,
+        list: ClientHelloList,
+        values: Option<&[u16]>,
+    ) -> Result<(), ErrorStack> {
+        let (ptr, len) = values.map_or((ptr::null(), 0), |values| (values.as_ptr(), values.len()));
+        unsafe {
+            cvt(ffi::SSL_CTX_set1_client_hello_list(
+                self.as_ptr(),
+                list.0,
+                ptr,
+                len,
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets whether clients start their signature_algorithms extension with a GREASE value.
+    #[corresponds(SSL_CTX_set_grease_signature_algorithms)]
+    pub fn set_grease_signature_algorithms(&mut self, enabled: bool) {
+        unsafe { ffi::SSL_CTX_set_grease_signature_algorithms(self.as_ptr(), enabled as _) }
+    }
+
+    /// Sets the length of the padding extension a strict extension order places.
+    #[corresponds(SSL_CTX_set_padding_length)]
+    pub fn set_padding_length(&mut self, len: u16) {
+        unsafe { ffi::SSL_CTX_set_padding_length(self.as_ptr(), len) }
+    }
+
+    /// Sets whether clients end their cipher suite list with TLS_EMPTY_RENEGOTIATION_INFO_SCSV.
+    #[corresponds(SSL_CTX_set_renegotiation_scsv)]
+    pub fn set_renegotiation_scsv(&mut self, enabled: bool) {
+        unsafe { ffi::SSL_CTX_set_renegotiation_scsv(self.as_ptr(), enabled as _) }
+    }
+
+    /// Sets whether TLS 1.3 clients offer post-handshake authentication (RFC 8446, section
+    /// 4.2.6) with an empty post_handshake_auth extension, placed where a strict extension order
+    /// lists [`ExtensionType::POST_HANDSHAKE_AUTH`]. Such a client answers each post-handshake
+    /// CertificateRequest with its configured certificate, or an empty Certificate if none is
+    /// configured, keeping its handshake transcript hash for the life of the connection.
+    #[corresponds(SSL_CTX_set_post_handshake_auth)]
+    pub fn set_post_handshake_auth(&mut self, enabled: bool) {
+        unsafe { ffi::SSL_CTX_set_post_handshake_auth(self.as_ptr(), enabled as _) }
+    }
+
+    /// Sets the trust anchor IDs clients request, as the encoded list of the trust_anchors
+    /// extension.
+    #[corresponds(SSL_CTX_set1_requested_trust_anchors)]
+    pub fn set_requested_trust_anchors(&mut self, ids: &[u8]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set1_requested_trust_anchors(
+                self.as_ptr(),
+                ids.as_ptr(),
+                ids.len(),
+            ))
+            .map(|_| ())
         }
     }
 
     /// Sets whether the aes hardware override should be enabled.
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_CTX_set_aes_hw_override)]
-    pub fn set_aes_hw_override(&mut self, enable: bool) {
-        unsafe { ffi::SSL_CTX_set_aes_hw_override(self.as_ptr(), enable as _) }
-    }
+    pub fn set_aes_hw_override(&mut self, _enable: bool) {}
 
     /// Sets whether to preserve the TLS 1.3 cipher list as configured by [`Self::set_cipher_list`].
     ///
@@ -2065,9 +2241,7 @@ impl SslContextBuilder {
     /// [`Self::set_cipher_list`]: #method.set_cipher_list
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_CTX_set_preserve_tls13_cipher_list)]
-    pub fn set_preserve_tls13_cipher_list(&mut self, enable: bool) {
-        unsafe { ffi::SSL_CTX_set_preserve_tls13_cipher_list(self.as_ptr(), enable as _) }
-    }
+    pub fn set_preserve_tls13_cipher_list(&mut self, _enable: bool) {}
 
     /// Sets the indices of the extensions to be permuted.
     #[corresponds(SSL_CTX_set_extension_order)]
@@ -2129,6 +2303,179 @@ impl SslContextBuilder {
                 curves.as_ptr(),
             ))
             .map(|_| ())
+        }
+    }
+
+    /// Sets the context's preferred groups (named groups / key-exchange curves) by their
+    /// TLS wire ids, in preference order. On a server this pins which group the ServerHello
+    /// selects — and, when the highest-preference group has no matching client key share,
+    /// makes the server send a HelloRetryRequest for it, so an origin's HRR behaviour can be
+    /// reproduced downstream. The ids are the `SSL_GROUP_*` values (e.g. `0x001d` for
+    /// X25519, `0x0102` for ffdhe4096).
+    #[corresponds(SSL_CTX_set1_group_ids)]
+    pub fn set_group_ids(&mut self, ids: &[u16]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set1_group_ids(
+                self.as_ptr(),
+                ids.as_ptr(),
+                ids.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the TLS 1.3 cipher-suite preference order by wire id (e.g. `0x1301` for
+    /// TLS_AES_128_GCM_SHA256), highest preference first. Unlike [`Self::set_cipher_list`],
+    /// this only orders the TLS 1.3 suites and does not touch the pre-1.3 cipher list, so a
+    /// server can pin which TLS 1.3 suite it selects (placing the origin's chosen suite
+    /// first) without clearing its classic ciphers.
+    #[corresponds(SSL_CTX_set_tls13_cipher_order)]
+    pub fn set_tls13_cipher_order(&mut self, ids: &[u16]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_tls13_cipher_order(
+                self.as_ptr(),
+                ids.as_ptr(),
+                ids.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the order a server writes its ServerHello and EncryptedExtensions extensions in,
+    /// by extension id: each listed, implemented extension the negotiation calls for is
+    /// written in this order, any other after them in BoringSSL's default order (none of the
+    /// EncryptedExtensions ones with [`Self::set_strict_server_extension_order`]). Lets a
+    /// downstream server reproduce an origin's ServerHello/EncryptedExtensions (JA3S/JA4S).
+    #[corresponds(SSL_CTX_set_server_extension_order)]
+    pub fn set_server_extension_order(&mut self, ids: &[u16]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_server_extension_order(
+                self.as_ptr(),
+                ids.as_ptr(),
+                ids.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Makes the order set with [`Self::set_server_extension_order`] the whole list of
+    /// optional server extensions: an unlisted one the negotiation would add is left out.
+    #[corresponds(SSL_CTX_set_strict_server_extension_order)]
+    pub fn set_strict_server_extension_order(&mut self, strict: bool) {
+        unsafe { ffi::SSL_CTX_set_strict_server_extension_order(self.as_ptr(), strict as _) }
+    }
+
+    /// Sets how many NewSessionTicket messages a server sends immediately after a
+    /// successful handshake (default two), so a downstream server can match the ticket
+    /// count an origin issued.
+    #[corresponds(SSL_CTX_set_num_tickets)]
+    pub fn set_num_tickets(&mut self, num_tickets: usize) -> Result<(), ErrorStack> {
+        unsafe { cvt(ffi::SSL_CTX_set_num_tickets(self.as_ptr(), num_tickets)).map(|_| ()) }
+    }
+
+    /// Sets the lifetime, in seconds, a server puts in a TLS 1.2 (or earlier) session
+    /// ticket / cache entry (the NewSessionTicket `ticket_lifetime`), matching an origin's.
+    #[corresponds(SSL_CTX_set_timeout)]
+    pub fn set_session_timeout(&mut self, seconds: u32) {
+        unsafe {
+            ffi::SSL_CTX_set_timeout(self.as_ptr(), seconds);
+        }
+    }
+
+    /// Sets the lifetime, in seconds, a server puts in a TLS 1.3 NewSessionTicket
+    /// (`ticket_lifetime`), matching an origin's.
+    #[corresponds(SSL_CTX_set_session_psk_dhe_timeout)]
+    pub fn set_session_psk_dhe_timeout(&mut self, seconds: u32) {
+        unsafe {
+            ffi::SSL_CTX_set_session_psk_dhe_timeout(self.as_ptr(), seconds);
+        }
+    }
+
+    /// Sets the 48-byte ticket key material a server uses to seal and open session tickets.
+    /// A stable, shared key lets a ticket issued on one connection resume on another (the
+    /// client-facing resumption WireMason keeps across connections); scope it to one
+    /// mirrored identity with [`Self::set_session_id_context`]. The slice must be 48 bytes.
+    #[corresponds(SSL_CTX_set_tlsext_ticket_keys)]
+    pub fn set_ticket_keys(&mut self, keys: &[u8]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_tlsext_ticket_keys(
+                self.as_ptr(),
+                keys.as_ptr().cast(),
+                keys.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the DER-encoded OCSP response a server staples to clients that request it, so a
+    /// downstream server can staple an OCSP response (generated for its own leaf) whenever
+    /// the origin stapled one. Enable stapling requests separately if acting as a client.
+    #[corresponds(SSL_CTX_set_ocsp_response)]
+    pub fn set_ocsp_response(&mut self, response: &[u8]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_ocsp_response(
+                self.as_ptr(),
+                response.as_ptr(),
+                response.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the length, in bytes (1 to 255, default 1), of the ticket_nonce a server writes
+    /// in each TLS 1.3 NewSessionTicket: the ticket's index as a big-endian integer of that
+    /// length, so a server can reproduce another implementation's nonce shape (OpenSSL's
+    /// eight bytes, say).
+    #[corresponds(SSL_CTX_set_ticket_nonce_length)]
+    pub fn set_ticket_nonce_length(&mut self, len: usize) -> Result<(), ErrorStack> {
+        unsafe { cvt(ffi::SSL_CTX_set_ticket_nonce_length(self.as_ptr(), len)).map(|_| ()) }
+    }
+
+    /// Sets whether a server adds a GREASE extension (RFC 8701) to each TLS 1.3
+    /// NewSessionTicket, as BoringSSL does by default and other implementations don't.
+    #[corresponds(SSL_CTX_set_ticket_grease_extension)]
+    pub fn set_ticket_grease_extension(&mut self, enabled: bool) {
+        unsafe { ffi::SSL_CTX_set_ticket_grease_extension(self.as_ptr(), enabled as _) }
+    }
+
+    /// Sets the signature algorithms a server signs its handshake (CertificateVerify,
+    /// ServerKeyExchange) with, in preference order, so it can pick the one an origin
+    /// picked for the same key type when the client offers it.
+    #[corresponds(SSL_CTX_set_signing_algorithm_prefs)]
+    pub fn set_signing_algorithm_prefs(
+        &mut self,
+        prefs: &[SslSignatureAlgorithm],
+    ) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set_signing_algorithm_prefs(
+                self.as_ptr(),
+                prefs.as_ptr().cast(),
+                prefs.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Seals and opens a server's session tickets with `method` instead of the context's
+    /// ticket keys, so the tickets' shape (their length, say) is the method's.
+    ///
+    /// See [`TicketAeadMethod`] for more details.
+    #[corresponds(SSL_CTX_set_ticket_aead_method)]
+    pub fn set_ticket_aead_method<M>(&mut self, method: M)
+    where
+        M: TicketAeadMethod,
+    {
+        unsafe {
+            self.replace_ex_data(SslContext::cached_ex_index::<M>(), method);
+
+            ffi::SSL_CTX_set_ticket_aead_method(
+                self.as_ptr(),
+                &ffi::SSL_TICKET_AEAD_METHOD {
+                    max_overhead: Some(callbacks::raw_ticket_max_overhead::<M>),
+                    seal: Some(callbacks::raw_ticket_seal::<M>),
+                    open: Some(callbacks::raw_ticket_open::<M>),
+                },
+            );
         }
     }
 
@@ -2787,6 +3134,15 @@ impl SslSessionRef {
         unsafe { ffi::SSL_SESSION_get_timeout(self.as_ptr()) }
     }
 
+    /// Returns the size, in bits, of the prime of the TLS 1.2 DHE group the session was
+    /// established with, on either side, or `None` if it used none.
+    #[corresponds(SSL_SESSION_get_dhe_bits)]
+    #[must_use]
+    pub fn dhe_bits(&self) -> Option<u16> {
+        let bits = unsafe { ffi::SSL_SESSION_get_dhe_bits(self.as_ptr()) };
+        (bits != 0).then_some(bits)
+    }
+
     /// Returns the session's TLS protocol version.
     #[corresponds(SSL_SESSION_get_protocol_version)]
     #[must_use]
@@ -3126,12 +3482,128 @@ impl SslRef {
         }
     }
 
+    /// Sends, as a server requesting a client certificate ([`SslVerifyMode::PEER`]), `body`
+    /// verbatim as the body of its CertificateRequest in a handshake negotiating `version`
+    /// (an origin's request a proxy mirrors), its own in one negotiating another. The custom
+    /// verify callback (see [`Self::set_custom_verify_callback`]) then runs on the client's
+    /// Certificate whether or not it carries a certificate.
+    #[corresponds(SSL_set1_certificate_request)]
+    pub fn set_certificate_request(
+        &mut self,
+        version: SslVersion,
+        body: &[u8],
+    ) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_set1_certificate_request(
+                self.as_ptr(),
+                version.0,
+                body.as_ptr(),
+                body.len(),
+            ))
+        }
+    }
+
+    /// Verifies, as a client, the server's certificate once the server's whole flight is
+    /// read, through its ServerHelloDone (TLS 1.2) or Finished (TLS 1.3), rather than right
+    /// after its Certificate, so a custom verify callback (see
+    /// [`Self::set_custom_verify_callback`]) pausing the handshake finds its
+    /// ServerKeyExchange and CertificateRequest read, and the handshake paused where every
+    /// other pause after the server's flight is (see [`Self::peek_server_alert`]). The client
+    /// sends nothing before then either way.
+    #[corresponds(SSL_set_verify_after_server_flight)]
+    pub fn set_verify_after_server_flight(&mut self, enabled: bool) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_set_verify_after_server_flight(
+                self.as_ptr(),
+                c_int::from(enabled),
+            ))
+        }
+    }
+
+    /// Like [`SslContextBuilder::set_session_id_context`], for this connection: as a server,
+    /// it resumes only sessions issued under the same context, and issues its own under it.
+    #[corresponds(SSL_set_session_id_context)]
+    pub fn set_session_id_context(&mut self, sid_ctx: &[u8]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_set_session_id_context(
+                self.as_ptr(),
+                sid_ctx.as_ptr(),
+                sid_ctx.len(),
+            ))
+        }
+    }
+
+    /// Like [`SslContextBuilder::set_private_key_method`], for this connection only: its
+    /// context, and the other connections sharing it, keep their private key or method.
+    #[corresponds(SSL_set_private_key_method)]
+    pub fn set_private_key_method<M>(&mut self, method: M)
+    where
+        M: PrivateKeyMethod,
+    {
+        unsafe {
+            // In an Arc, as the method is called with this connection borrowed mutably.
+            self.replace_ex_data(Ssl::cached_ex_index::<Arc<M>>(), Arc::new(method));
+
+            ffi::SSL_set_private_key_method(
+                self.as_ptr(),
+                &ffi::SSL_PRIVATE_KEY_METHOD {
+                    sign: Some(callbacks::raw_sign::<M>),
+                    decrypt: Some(callbacks::raw_decrypt::<M>),
+                    complete: Some(callbacks::raw_complete::<M>),
+                },
+            );
+        }
+    }
+
+    /// Looks through `records`, what the server sent this client since its handshake paused
+    /// after the server's whole flight (see [`Self::set_verify_after_server_flight`]), read
+    /// from the transport and not yet given to it, for the alert the server ended the
+    /// handshake with meanwhile, leaving the connection as it is: TLS 1.3 records are opened
+    /// with the server's application traffic keys, handshake messages before the alert (a
+    /// NewSessionTicket) skipped. Each record is looked through once: `scan` tells how far
+    /// earlier calls on the same `records`, read ahead since, did, and is moved on.
+    #[corresponds(SSL_peek_server_alert)]
+    #[must_use]
+    pub fn peek_server_alert(&self, records: &[u8], scan: &mut AlertScan) -> PeekedAlert {
+        let (mut level, mut description) = (0, 0);
+        match unsafe {
+            ffi::SSL_peek_server_alert(
+                self.as_ptr(),
+                records.as_ptr(),
+                records.len(),
+                &mut scan.scanned,
+                &mut scan.records,
+                &mut level,
+                &mut description,
+            )
+        } {
+            1 => PeekedAlert::Alert { level, description },
+            0 => PeekedAlert::Incomplete,
+            _ => PeekedAlert::Unknown,
+        }
+    }
+
+    /// Sends a warning-level close_notify alert, even in the middle of a handshake, where
+    /// [`SslStream::shutdown`] sends none. No other alert is sent after it, so a handshake
+    /// callback that sends it and then fails the handshake sends no fatal alert.
+    #[corresponds(SSL_send_close_notify)]
+    pub fn send_close_notify(&mut self) -> Result<(), ErrorStack> {
+        unsafe { cvt(ffi::SSL_send_close_notify(self.as_ptr())) }
+    }
+
     /// Like [`SslContextBuilder::set_tmp_dh`].
     ///
     /// [`SslContextBuilder::set_tmp_dh`]: struct.SslContextBuilder.html#method.set_tmp_dh
     #[corresponds(SSL_set_tmp_dh)]
     pub fn set_tmp_dh(&mut self, dh: &DhRef<Params>) -> Result<(), ErrorStack> {
         unsafe { cvt(ffi::SSL_set_tmp_dh(self.as_ptr(), dh.as_ptr())) }
+    }
+
+    /// Accepts, as a client, a TLS 1.2 DHE group of at least `bits` bits instead of 2048,
+    /// never one below 512 bits, and doesn't offer a session from a smaller one.
+    #[corresponds(SSL_set_min_dhe_bits)]
+    pub fn set_min_dhe_bits(&mut self, bits: u16) -> Result<(), ErrorStack> {
+        unsafe { cvt(ffi::SSL_set_min_dhe_bits(self.as_ptr(), bits)) }
     }
 
     /// Like [`SslContextBuilder::set_tmp_ecdh`].
@@ -3146,6 +3618,12 @@ impl SslRef {
     #[corresponds(SSL_set_permute_extensions)]
     pub fn set_permute_extensions(&mut self, enabled: bool) {
         unsafe { ffi::SSL_set_permute_extensions(self.as_ptr(), enabled as _) }
+    }
+
+    /// Like [`SslContextBuilder::set_post_handshake_auth`].
+    #[corresponds(SSL_set_post_handshake_auth)]
+    pub fn set_post_handshake_auth(&mut self, enabled: bool) {
+        unsafe { ffi::SSL_set_post_handshake_auth(self.as_ptr(), enabled as _) }
     }
 
     /// Like [`SslContextBuilder::set_alpn_protos`].
@@ -3673,6 +4151,14 @@ impl SslRef {
         unsafe { SSL_is_server(self.as_ptr()) != 0 }
     }
 
+    /// Returns the connection's shutdown state: whether a close_notify was sent to the peer,
+    /// or received from it.
+    #[corresponds(SSL_get_shutdown)]
+    #[must_use]
+    pub fn get_shutdown(&self) -> ShutdownState {
+        unsafe { ShutdownState::from_bits_retain(ffi::SSL_get_shutdown(self.as_ptr())) }
+    }
+
     /// Sets the extra data at the specified index.
     ///
     /// This can be used to provide data to callbacks registered with the context. Use the
@@ -3940,6 +4426,59 @@ impl SslRef {
         }
     }
 
+    /// Enables ALPS for the ALPN protocol `alps` with `settings` as this side's
+    /// application settings: a server's, sent in its EncryptedExtensions to a client that
+    /// offered ALPS for the negotiated protocol; a client's, sent in its own.
+    #[corresponds(SSL_add_application_settings)]
+    pub fn add_application_settings_with(
+        &mut self,
+        alps: &[u8],
+        settings: &[u8],
+    ) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_add_application_settings(
+                self.as_ptr(),
+                alps.as_ptr(),
+                alps.len(),
+                settings.as_ptr(),
+                settings.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// The application settings the peer sent (ALPS), `None` when ALPS wasn't negotiated.
+    #[corresponds(SSL_get0_peer_application_settings)]
+    pub fn peer_application_settings(&self) -> Option<&[u8]> {
+        unsafe {
+            if ffi::SSL_has_application_settings(self.as_ptr()) == 0 {
+                return None;
+            }
+            let mut data = ptr::null();
+            let mut len = 0;
+            ffi::SSL_get0_peer_application_settings(self.as_ptr(), &mut data, &mut len);
+            if data.is_null() {
+                return Some(&[]);
+            }
+            Some(slice::from_raw_parts(data, len))
+        }
+    }
+
+    /// Replaces, on a client mid-handshake that negotiated ALPS but hasn't sent its
+    /// EncryptedExtensions yet (as during a custom verification callback returning
+    /// [`SslVerifyError::Retry`]), the application settings it sends.
+    #[corresponds(SSL_set_pending_application_settings)]
+    pub fn set_pending_application_settings(&mut self, settings: &[u8]) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_set_pending_application_settings(
+                self.as_ptr(),
+                settings.as_ptr(),
+                settings.len(),
+            ))
+            .map(|_| ())
+        }
+    }
+
     /// Sets the ALPS use new codepoint flag.
     #[corresponds(SSL_set_alps_use_new_codepoint)]
     pub fn set_alps_use_new_codepoint(&mut self, enable: bool) {
@@ -3950,10 +4489,7 @@ impl SslRef {
     /// Sets whether the aes hardware override should be enabled.
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_set_aes_hw_override)]
-    pub fn set_aes_hw_override(&mut self, enable: bool) {
-        let enable = if enable { 1 } else { 0 };
-        unsafe { ffi::SSL_set_aes_hw_override(self.as_ptr(), enable) }
-    }
+    pub fn set_aes_hw_override(&mut self, _enable: bool) {}
 }
 
 /// An SSL stream midway through the handshake process.
@@ -4178,6 +4714,27 @@ impl<S: Read + Write> SslStream<S> {
         match unsafe { ffi::SSL_shutdown(self.ssl.as_ptr()) } {
             0 => Ok(ShutdownResult::Sent),
             1 => Ok(ShutdownResult::Received),
+            n => Err(self.make_error(n)),
+        }
+    }
+
+    /// Sends the fatal alert `description`, even in the middle of a handshake; no other
+    /// alert is sent after it. Retried after `WANT_WRITE`, it sends the same alert. A write
+    /// left unfinished is abandoned, the record it sealed sent ahead of the alert.
+    #[corresponds(SSL_send_fatal_alert)]
+    pub fn send_fatal_alert(&mut self, description: u8) -> Result<(), Error> {
+        match unsafe { ffi::SSL_send_fatal_alert(self.ssl.as_ptr(), description) } {
+            n if n > 0 => Ok(()),
+            n => Err(self.make_error(n)),
+        }
+    }
+
+    /// Sends a warning-level close_notify alert, even in the middle of a handshake (see
+    /// [`SslRef::send_close_notify`]).
+    #[corresponds(SSL_send_close_notify)]
+    pub fn send_close_notify(&mut self) -> Result<(), Error> {
+        match unsafe { ffi::SSL_send_close_notify(self.ssl.as_ptr()) } {
+            n if n > 0 => Ok(()),
             n => Err(self.make_error(n)),
         }
     }
@@ -4496,6 +5053,28 @@ impl<S> SslStreamBuilder<S> {
     }
 }
 
+/// How far [`SslRef::peek_server_alert`] looked through what a server sent: the bytes and
+/// records it found no alert in.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct AlertScan {
+    scanned: usize,
+    records: u64,
+}
+
+/// What [`SslRef::peek_server_alert`] found.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum PeekedAlert {
+    /// The server's alert: its level and description.
+    Alert { level: u8, description: u8 },
+
+    /// No record past the server's handshake messages is whole yet.
+    Incomplete,
+
+    /// Something other than an alert (application data), a record that couldn't be opened,
+    /// or a connection not so paused: none of the server's alerts can be told.
+    Unknown,
+}
+
 /// The result of a shutdown request.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ShutdownResult {
@@ -4586,6 +5165,33 @@ impl PrivateKeyMethodError {
 
     /// The operation could not be completed and should be retried later.
     pub const RETRY: Self = Self(ffi::ssl_private_key_result_t::ssl_private_key_retry);
+}
+
+/// Seals a server's session tickets and opens them again (see
+/// [`SslContextBuilder::set_ticket_aead_method`]).
+pub trait TicketAeadMethod: Send + Sync + 'static {
+    /// The most bytes [`Self::seal`] adds to a serialized session.
+    fn max_overhead(&self, ssl: &SslRef) -> usize;
+
+    /// Seals the serialized session `session` into the ticket it returns, at most
+    /// `session.len()` plus [`Self::max_overhead`] bytes long; an empty ticket sends no
+    /// NewSessionTicket, `None` fails the handshake.
+    fn seal(&self, ssl: &SslRef, session: &[u8]) -> Option<Vec<u8>>;
+
+    /// Opens `ticket` back into the serialized session it seals, at most `ticket.len()`
+    /// bytes long.
+    fn open(&self, ssl: &SslRef, ticket: &[u8]) -> TicketOpen;
+}
+
+/// What [`TicketAeadMethod::open`] made of a ticket.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TicketOpen {
+    /// The serialized session it sealed.
+    Session(Vec<u8>),
+    /// A ticket this method didn't seal (or can't open any more): a full handshake.
+    Ignore,
+    /// A fatal error: the handshake fails.
+    Error,
 }
 
 /// Describes certificate compression algorithm. Implementation MUST implement transformation at least in one direction.
